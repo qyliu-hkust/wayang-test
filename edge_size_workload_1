@@ -1,0 +1,26 @@
+#Doc=5000, #keywords=500
+#Edges=2255
+
+#Doc=5000, #keywords=1000
+#Edges=18050
+
+#Doc=5000, #keywords=2000
+#Edges=130556
+
+#Doc=10000, #keywords=500
+#Edges=4413
+
+#Doc=10000, #keywords=1000
+#Edges=30883
+
+#Doc=10000, #keywords=2000
+#Edges=323568
+
+#Doc=50000, #keywords=500
+#Edges=23482
+
+#Doc=50000, #keywords=1000
+#Edges=207358
+
+#Doc=50000, #keywords=2000
+#Edges=1387789

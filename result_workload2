@@ -1,0 +1,26 @@
+#Doc=5000, #keywords=1000
+Total Time (ms): 199282
+
+#Doc=5000, #keywords=5000
+Total Time (ms): 857616
+
+#Doc=5000, #keywords=10000
+Total Time (ms): 1764115
+
+#Doc=10000, #keywords=1000
+Total Time (ms): 375403
+
+#Doc=10000, #keywords=5000
+Total Time (ms): 1651461
+
+#Doc=10000, #keywords=10000
+Total Time (ms): 3709356
+
+#Doc=50000, #keywords=1000
+Total Time (ms): 819804
+
+#Doc=50000, #keywords=5000
+Total Time (ms):
+
+#Doc=50000, #keywords=10000
+Total Time (ms):
