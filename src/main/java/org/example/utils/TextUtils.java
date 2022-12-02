@@ -5,6 +5,10 @@ import cc.mallet.topics.ParallelTopicModel;
 import cc.mallet.types.Alphabet;
 import cc.mallet.types.IDSorter;
 import cc.mallet.types.InstanceList;
+import edu.stanford.nlp.ie.AbstractSequenceClassifier;
+import edu.stanford.nlp.ie.crf.CRFClassifier;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.util.Triple;
 import io.github.crew102.rapidrake.RakeAlgorithm;
 import io.github.crew102.rapidrake.model.RakeParams;
 import io.github.crew102.rapidrake.model.Result;
@@ -198,11 +202,38 @@ public class TextUtils {
         return new Pair<>(docTopicMatrix, wordTopicMatrix);
     }
 
+    public static Map<String, Set<String>> executeNER(List<Document> documents) {
+        String modelPath = "./classifiers/english.all.3class.distsim.crf.ser.gz";;
+        Map<String, Set<String>> nerResults = new HashMap<>();
+        try {
+            AbstractSequenceClassifier<CoreLabel> classifier = CRFClassifier.getClassifier(modelPath);
+            for (Document doc : documents) {
+                List<Triple<String, Integer, Integer>> predict = classifier.classifyToCharacterOffsets(doc.text);
+                for (Triple<String, Integer, Integer> label : predict) {
+                    String type = label.first();
+                    String entity = doc.text.substring(label.second(), label.third());
+                    if (nerResults.containsKey(type)) {
+                        nerResults.get(type).add(entity);
+                    } else {
+                        Set<String> entities = new HashSet<>();
+                        entities.add(entity);
+                        nerResults.put(type, entities);
+                    }
+                }
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return nerResults;
+    }
+
     public static void main(String[] args) {
         try {
-            List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", 5000);
-            Optional<Integer> reduce = documents.stream().map(d -> d.tokens.size()).reduce(Integer::sum);
-            reduce.ifPresent(integer -> System.out.println(integer / (1.0 * documents.size())));
+            List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", 100);
+            Map<String, Set<String>> ner = executeNER(documents);
+            for (String key : ner.keySet()) {
+                System.out.println("key: " + key + " " + ner.get(key));
+            }
 
         } catch (Exception e) {
             e.printStackTrace();

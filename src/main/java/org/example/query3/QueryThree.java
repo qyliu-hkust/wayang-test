@@ -17,11 +17,24 @@ package org.example.query3;
 //    );
 
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 
 public class QueryThree {
-    public static void main(String[] args) {
+    private static final String URL = "jdbc:postgresql://localhost/test";
+    private static final String USER = "";
+    private static final String PASSWD = "";
+
+    public static void main(String[] args) throws SQLException {
+        int rows = 50;
+
+        Connection conn = DriverManager.getConnection(URL, USER, PASSWD);
+
         List<String> keywords = Arrays.asList("corona", "covid", "pandemic", "vaccine");
+
     }
 }
