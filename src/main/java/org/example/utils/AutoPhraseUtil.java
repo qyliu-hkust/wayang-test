@@ -7,7 +7,7 @@ import java.util.*;
 public class AutoPhraseUtil {
     private final String dataPath = "data/EN/awesome.txt";
     private final String modelPath = "models/AWESOME";
-    private final String workspace = "/home/liuqy/AutoPhrase/";
+    private final String workspace = "/users/Xiuwen/AutoPhrase/";
     private final int num;
     private final int min_sup;
     private final List<String> documents;
