@@ -87,6 +87,11 @@ public class QueryThree {
     public static void main(String[] args) throws IOException, ParseException {
         int rows = 500;
         int graphSize = 100000;
+
+        if (args.length > 0) {
+            rows = Integer.parseInt(args[0]);
+            graphSize = Integer.parseInt(args[1]);
+        }
         
         List<String> keywords = Arrays.asList("corona", "covid", "pandemic", "vaccine");
         List<Document> documents = TextUtils.createDocsFromCSV("../data/newssolr.csv", Integer.MAX_VALUE, 1, 0, false);

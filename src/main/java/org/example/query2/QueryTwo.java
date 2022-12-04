@@ -44,6 +44,11 @@ public class QueryTwo {
         int maxDistance = 5;
         int pgTopK = 20;
 
+        if (args.length > 0) {
+            limit = Integer.parseInt(args[0]);
+            numWords = Integer.parseInt(args[1]);
+        }
+
         WayangContext wayangContext = new WayangContext(new Configuration())
                 .withPlugin(Java.basicPlugin())
                 .withPlugin(Sqlite3.conversionPlugin());

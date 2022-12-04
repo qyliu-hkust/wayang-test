@@ -33,7 +33,12 @@ public class QueryOne {
         String dataPath = "../data/sbir_award_data.csv";
         int limit = 50000;
         int maxKeywordSize = 2000;
-        int distance = 100;
+        int distance = 200;
+
+        if (args.length > 0) {
+            limit = Integer.parseInt(args[0]);
+            maxKeywordSize = Integer.parseInt(args[1]);
+        }
 
         System.out.println(String.format("#Document: %d, maxKeywordSize: %d, distance: %d",
                 limit, maxKeywordSize, distance));
