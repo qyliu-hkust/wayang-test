@@ -14,7 +14,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <build>
+    <!-- <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -37,10 +37,9 @@
                 </executions>
             </plugin>
         </plugins>
-    </build>
+    </build> -->
 
     
-
     <dependencies>
         <dependency>
             <groupId>org.apache.wayang</groupId>
