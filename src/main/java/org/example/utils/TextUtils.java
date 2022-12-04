@@ -15,11 +15,28 @@ import io.github.crew102.rapidrake.model.Result;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -44,11 +61,16 @@ public class TextUtils {
         return documents;
     }
 
-    public static List<Document> createDocsFromCSV(String path, int limit, int idPosition, int textPostition)
+    public static List<Document> createDocsFromCSV(String path, int limit, int idPosition, int textPostition, boolean isHeader)
         throws IOException {
         List<Document> documents = new ArrayList<>();
         File csvFile = new File(path);
-        CSVParser parser = CSVFormat.DEFAULT.withFirstRecordAsHeader().parse(new FileReader(csvFile));
+        CSVParser parser;
+        if (isHeader) {
+            parser = CSVFormat.DEFAULT.withFirstRecordAsHeader().parse(new FileReader(csvFile));
+        } else {
+            parser = CSVFormat.DEFAULT.parse(new FileReader(csvFile));
+        }
         int cnt = 0;
         for (CSVRecord record : parser) {
             long id = Long.parseLong(record.get(idPosition));
@@ -83,6 +105,26 @@ public class TextUtils {
         return documents;
     }
 
+
+    public static List<Pair<String, String>> loadPairsFromCSV(String path, int firstPosition, int secondPosition, boolean isHeader) 
+        throws IOException {
+        List<Pair<String, String>> pairs = new ArrayList<>();
+        File csvFile = new File(path);
+        CSVParser parser;
+        if (isHeader) {
+            parser = CSVFormat.DEFAULT.withFirstRecordAsHeader().parse(new FileReader(csvFile));
+        } else {
+            parser = CSVFormat.DEFAULT.parse(new FileReader(csvFile));
+        }
+        for (CSVRecord record : parser) {
+            String first = record.get(firstPosition);
+            String second = record.get(secondPosition);
+            pairs.add(new Pair<String, String>(first, second));
+        }
+        return pairs;
+    }
+
+
     public static Set<String> loadStopWordsFromFile(String path) {
         Set<String> stopWords = new HashSet<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
@@ -93,13 +135,16 @@ public class TextUtils {
         return stopWords;
     }
 
+
     public static List<String> tokenize(String text, Set<String> stopWords) {
         return null;
     }
 
+
     private final static String delims = "[-,.?():;\"!/]";
     private final static String posUrl = "../model-bin/en-pos-maxent.bin";
     private final static String sentUrl = "../model-bin/en-sent.bin";
+
 
     public static List<String> executePhraseMining(String text, int maxKeywordSize) throws IOException {
         Set<String> keywordSet = new HashSet<>();
@@ -203,7 +248,7 @@ public class TextUtils {
     }
 
     public static Map<String, Set<String>> executeNER(List<Document> documents) {
-        String modelPath = "./classifiers/english.all.3class.distsim.crf.ser.gz";;
+        String modelPath = "./classifiers/english.all.3class.distsim.crf.ser.gz";
         Map<String, Set<String>> nerResults = new HashMap<>();
         try {
             AbstractSequenceClassifier<CoreLabel> classifier = CRFClassifier.getClassifier(modelPath);
@@ -227,12 +272,50 @@ public class TextUtils {
         return nerResults;
     }
 
+    // return the index directory
+    public static Directory createTextIndex(List<Document> documents, Analyzer analyzer) throws IOException {
+        Path indexPath = Files.createTempDirectory("tempIndex");
+        Directory directory = FSDirectory.open(indexPath);
+        IndexWriterConfig config = new IndexWriterConfig(analyzer);
+        IndexWriter iwriter = new IndexWriter(directory, config);
+        for (Document myDoc : documents) {
+            org.apache.lucene.document.Document indexDoc = new org.apache.lucene.document.Document();
+            indexDoc.add(new Field("text-field", myDoc.text, TextField.TYPE_STORED));
+            indexDoc.add(new Field("id", String.valueOf(myDoc.docID), TextField.TYPE_STORED));
+            iwriter.addDocument(indexDoc);
+        }
+        iwriter.close();
+
+        return directory;
+    }
+
+    public static List<Document> searchTextIndex(Directory indexDir, List<String> keywords, int n, Analyzer analyzer) throws IOException, ParseException {
+        DirectoryReader iReader = DirectoryReader.open(indexDir);
+        IndexSearcher iSearcher = new IndexSearcher(iReader);
+        QueryParser parser = new QueryParser("text-field", analyzer);
+        Query q = parser.parse(String.join(" OR ", keywords));
+        TopDocs topDocs = iSearcher.search(q, n);
+        
+        List<Document> result = new ArrayList<>(topDocs.scoreDocs.length);
+        for (ScoreDoc sd : topDocs.scoreDocs) {
+            String text = iSearcher.doc(sd.doc).get("text-field");
+            long id = Long.parseLong(iSearcher.doc(sd.doc).get("id"));
+            result.add(new Document(id, text));
+        }
+
+        return result;
+    }
+
+
     public static void main(String[] args) {
         try {
-            List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", 100);
-            Map<String, Set<String>> ner = executeNER(documents);
-            for (String key : ner.keySet()) {
-                System.out.println("key: " + key + " " + ner.get(key));
+            List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", 1000);
+            Analyzer analyzer = new StandardAnalyzer();
+            Directory dir = createTextIndex(documents, analyzer);
+            List<String> keywords = Arrays.asList("corona", "covid", "pandemic", "vaccine");
+            for (Document doc : searchTextIndex(dir, keywords, 100, analyzer)) {
+                System.out.println(doc.docID);
+                System.out.println(doc.text);
             }
 
         } catch (Exception e) {
