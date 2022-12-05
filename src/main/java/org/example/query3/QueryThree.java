@@ -3,6 +3,11 @@ package org.example.query3;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -10,6 +15,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -45,6 +52,11 @@ import org.example.utils.*;
 
 
 public class QueryThree {
+
+    private static final String URL = "jdbc:postgresql://awesome-hw.sdsc.edu/";
+    private static final String USER_NAME = "postgres";
+    private static final String PASSWD = "Sdsc2018#";
+    private static final String DB_NAME = "postgres";
 
     private static List<Pair<Long, String>> loadUserTable(String path, int size) throws IOException {
         List<Pair<Long, String>> data = new ArrayList<>();
@@ -84,8 +96,46 @@ public class QueryThree {
         return data;
     }
 
+    private static List<Pair<Long, String>> loadTweetTable(int size) {
+        List<Pair<Long, String>> data = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(URL, USER_NAME, PASSWD);
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("select * from xw_neo4j_tweet" + size)) {
+            while (rs.next()) {
+                long first = rs.getLong(1);
+                String second = rs.getString(2);
+                data.add(new Pair<>(first, second));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return data;
+    }
+
+    private static List<String> query1(int size, List<String> twitterNames) {
+        String sql = "select uu.userid1, uu.userid2, u.username" +
+                     "from xw_neo4j_user_user%d as uu, xw_neo4j_user%d as u" +
+                     "where uu.userid2 = u.userid and u.username in ('lianystr', 'aaas')";
+        sql = String.format(sql, size, size);
+        System.out.println(sql);
+
+        List<String> names = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(URL, USER_NAME, PASSWD);
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                String name = rs.getString(3);
+                names.add(name);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return names;
+    }
+
     public static void main(String[] args) throws IOException, ParseException {
-        int rows = 500;
+        int rows = 5000;
         int graphSize = 100000;
 
         if (args.length > 0) {
@@ -98,6 +148,9 @@ public class QueryThree {
         Analyzer analyzer = new StandardAnalyzer();
         Directory indexDirectory = TextUtils.createTextIndex(documents, analyzer);
         
+
+        long start = System.currentTimeMillis();
+
         List<Document> queryResults = TextUtils.searchTextIndex(indexDirectory, keywords, rows, analyzer);
 
         Map<String, Set<String>> nerResults = TextUtils.executeNER(queryResults);
@@ -125,12 +178,31 @@ public class QueryThree {
                 .filter(s -> namedEntitySet.contains(s.getFirst().toLowerCase()))
                 .collect();
         
-        System.out.println("#matched entities: " + matchedEntities.size());
+        System.out.println("#matched entities: " + matchedEntities);
         
-        List<Pair<Long, String>> userTable = loadUserTable("../data/", graphSize);
-        List<Pair<Long, Long>> userTweetTable = loadUserTweetTable("../data/", graphSize);
-        List<Pair<Long, Long>> userMentionTable = loadUserMentionTable("../data/", graphSize);
+        List<Pair<Long, String>> tweetTable = loadTweetTable(graphSize);
 
-        
+        // query1(graphSize, matchedEntities.stream().map(e -> e.getSecond()).collect(Collectors.toList()));
+
+        JavaPlanBuilder planBuilder3 = new JavaPlanBuilder(wayangContext)
+                .withJobName("match twitter handlers")
+                .withUdfJarOf(QueryThree.class);
+
+        Collection<String> tweets = planBuilder3.loadCollection(tweetTable)
+                .map(t -> t.getSecond())
+                .filter(text -> {
+                    boolean flag = false;
+                    for (Pair<String, String> e : matchedEntities) {
+                        if (text.indexOf(e.getFirst()) != -1) {
+                            flag = true;
+                            break;
+                        } 
+                    }
+                    return flag;
+                })
+                .collect();
+
+        long end = System.currentTimeMillis();
+        System.out.println("total time: " + (end - start));
     }
 }
