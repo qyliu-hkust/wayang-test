@@ -136,7 +136,7 @@ public class QueryThree {
 
     public static void main(String[] args) throws IOException, ParseException {
         int rows = 5000;
-        int graphSize = 100000;
+        int graphSize = 100_000;
 
         if (args.length > 0) {
             rows = Integer.parseInt(args[0]);

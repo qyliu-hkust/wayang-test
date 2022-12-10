@@ -39,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -250,23 +251,24 @@ public class TextUtils {
 
     public static Map<String, Set<String>> executeNER(List<Document> documents) {
         String modelPath = "./classifiers/english.all.3class.distsim.crf.ser.gz";
-        Map<String, Set<String>> nerResults = new HashMap<>();
+        Map<String, Set<String>> nerResults = new ConcurrentHashMap<>();
         try {
             AbstractSequenceClassifier<CoreLabel> classifier = CRFClassifier.getClassifier(modelPath);
-            for (Document doc : documents) {
-                List<Triple<String, Integer, Integer>> predict = classifier.classifyToCharacterOffsets(doc.text);
-                for (Triple<String, Integer, Integer> label : predict) {
-                    String type = label.first();
-                    String entity = doc.text.substring(label.second(), label.third());
-                    if (nerResults.containsKey(type)) {
-                        nerResults.get(type).add(entity);
-                    } else {
-                        Set<String> entities = new HashSet<>();
-                        entities.add(entity);
-                        nerResults.put(type, entities);
+            documents.parallelStream()
+                .forEach(doc -> {
+                    List<Triple<String, Integer, Integer>> predict = classifier.classifyToCharacterOffsets(doc.text);
+                    for (Triple<String, Integer, Integer> label : predict) {
+                        String type = label.first();
+                        String entity = doc.text.substring(label.second(), label.third());
+                        if (nerResults.containsKey(type)) {
+                            nerResults.get(type).add(entity);
+                        } else {
+                            Set<String> entities = new HashSet<>();
+                            entities.add(entity);
+                            nerResults.put(type, entities);
+                        }
                     }
-                }
-            }
+                });
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
@@ -275,19 +277,24 @@ public class TextUtils {
 
     // return the index directory
     public static Directory createTextIndex(List<Document> documents, Analyzer analyzer) throws IOException {
-        Path indexPath = Files.createTempDirectory("tempIndex");
-        Directory directory = FSDirectory.open(indexPath);
-        IndexWriterConfig config = new IndexWriterConfig(analyzer);
-        IndexWriter iwriter = new IndexWriter(directory, config);
-        for (Document myDoc : documents) {
-            org.apache.lucene.document.Document indexDoc = new org.apache.lucene.document.Document();
-            indexDoc.add(new Field("text-field", myDoc.text, TextField.TYPE_STORED));
-            indexDoc.add(new Field("id", String.valueOf(myDoc.docID), TextField.TYPE_STORED));
-            iwriter.addDocument(indexDoc);
+        // Path indexPath = Files.createTempDirectory("tempIndex");
+        Path indexPath = Paths.get("./tempIndex");
+        if (!Files.exists(indexPath)) {
+            Files.createDirectory(indexPath);
+            Directory directory = FSDirectory.open(indexPath);
+            IndexWriterConfig config = new IndexWriterConfig(analyzer);
+            IndexWriter iwriter = new IndexWriter(directory, config);
+            for (Document myDoc : documents) {
+                org.apache.lucene.document.Document indexDoc = new org.apache.lucene.document.Document();
+                indexDoc.add(new Field("text-field", myDoc.text, TextField.TYPE_STORED));
+                indexDoc.add(new Field("id", String.valueOf(myDoc.docID), TextField.TYPE_STORED));
+                iwriter.addDocument(indexDoc);
+            }
+            iwriter.close();
+            return directory;
+        } else {
+            return FSDirectory.open(indexPath);
         }
-        iwriter.close();
-
-        return directory;
     }
 
     public static List<Document> searchTextIndex(Directory indexDir, List<String> keywords, int n, Analyzer analyzer) throws IOException, ParseException {
@@ -304,20 +311,31 @@ public class TextUtils {
             result.add(new Document(id, text));
         }
 
+
+
         return result;
     }
 
 
     public static void main(String[] args) {
         try {
-            List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", 1000);
+            // List<Document> documents= createDocsFromCSV("../data/sbir_award_data.csv", Integer.MAX_VALUE);
+            // long start = System.currentTimeMillis();
+            // Map<String, Set<String>> ner = executeNER(documents);
+            // long end = System.currentTimeMillis();
+            // System.out.println(end - start);
+            
+            List<Document> documents = TextUtils.createDocsFromCSV("../data/newssolr.csv", Integer.MAX_VALUE, 1, 0, false);
             Analyzer analyzer = new StandardAnalyzer();
-            Directory dir = createTextIndex(documents, analyzer);
+            Directory indexDirectory = TextUtils.createTextIndex(documents, analyzer);
             List<String> keywords = Arrays.asList("corona", "covid", "pandemic", "vaccine");
-            for (Document doc : searchTextIndex(dir, keywords, 100, analyzer)) {
-                System.out.println(doc.docID);
-                System.out.println(doc.text);
-            }
+            List<Document> queryResults = TextUtils.searchTextIndex(indexDirectory, keywords, 10, analyzer);
+            queryResults.forEach(doc -> System.out.println(doc.text));
+            
+            // for (Document doc : searchTextIndex(dir, keywords, 100, analyzer)) {
+            //     System.out.println(doc.docID);
+            //     System.out.println(doc.text);
+            // }
 
         } catch (Exception e) {
             e.printStackTrace();
